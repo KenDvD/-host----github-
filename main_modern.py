@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-SmartHostsTool - 主程序（完美还原版）
+SmartHostsTool - 主程序（完美版）
 - 内核：高性能优化（并发测速、自动提权、不卡顿背景）
-- UI：文字完全还原原版，仅简化源按钮显示
-- 交互：恢复 Toast 样式的漂亮弹窗提示
 """
 
 from __future__ import annotations
@@ -94,7 +92,8 @@ def check_and_elevate():
     if is_admin(): return True
     if sys.platform == "win32":
         try:
-            ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__, None, 1)
+            # 使用5参数（SW_SHOW）代替1，确保不显示额外的控制台窗口
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__, None, 5)
             sys.exit(0)
         except Exception:
             ctypes.windll.user32.MessageBoxW(0, "需要管理员权限才能写入Hosts文件。\n请右键选择「以管理员身份运行」。", "权限不足", 0x10)
@@ -645,8 +644,12 @@ class HostsOptimizer(ttk.Frame):
         except Exception as e: messagebox.showerror("错误", f"写入Hosts文件失败: {e}")
 
     def flush_dns(self, silent=False):
+        """刷新DNS缓存"""
         try: 
-            subprocess.run("ipconfig /flushdns", shell=True)
+            # 设置subprocess参数以隐藏控制台窗口
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            subprocess.run("ipconfig /flushdns", shell=True, startupinfo=startupinfo)
             if not silent: 
                 messagebox.showinfo("成功", "DNS缓存已成功刷新")
                 self.status_label.config(text="DNS缓存已刷新", bootstyle=SUCCESS)
@@ -654,7 +657,11 @@ class HostsOptimizer(ttk.Frame):
 
     def view_hosts_file(self):
         try: os.startfile(HOSTS_PATH)
-        except: subprocess.run(["notepad", HOSTS_PATH])
+        except: 
+            # 设置subprocess参数以隐藏控制台窗口
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            subprocess.run(["notepad", HOSTS_PATH], startupinfo=startupinfo)
 
 def main():
     check_and_elevate()
