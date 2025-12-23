@@ -25,6 +25,7 @@ from urllib3.util.retry import Retry
 import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from ttkbootstrap.tooltip import ToolTip
 from tkinter import messagebox, simpledialog, StringVar, Menu
 
 # 导入关于界面
@@ -248,6 +249,62 @@ class HostsOptimizer(ttk.Frame):
             style.configure("Card.TFrame", background=style.colors.bg)
         except: pass
 
+
+    # -------------------------
+    # Treeview 美化：斑马纹 / 状态着色（不影响功能）
+    # -------------------------
+    def _hex_to_rgb(self, hx: str):
+        hx = (hx or "").lstrip("#")
+        return tuple(int(hx[i:i+2], 16) for i in (0, 2, 4))
+
+    def _rgb_to_hex(self, rgb):
+        return "#%02x%02x%02x" % rgb
+
+    def _mix(self, c1: str, c2: str, t: float) -> str:
+        """在 c1 和 c2 之间按比例 t（0~1）混合颜色。失败则返回 c1。"""
+        try:
+            if not (isinstance(c1, str) and isinstance(c2, str)):
+                return c1
+            if not (c1.startswith("#") and c2.startswith("#") and len(c1) == 7 and len(c2) == 7):
+                return c1
+            r1, g1, b1 = self._hex_to_rgb(c1)
+            r2, g2, b2 = self._hex_to_rgb(c2)
+            r = int(r1 + (r2 - r1) * t)
+            g = int(g1 + (g2 - g1) * t)
+            b = int(b1 + (b2 - b1) * t)
+            return self._rgb_to_hex((r, g, b))
+        except Exception:
+            return c1
+
+    def _setup_treeview_tags(self, tv: ttk.Treeview):
+        """给 Treeview 加：斑马纹 + 状态色（可用/超时）。"""
+        try:
+            style = ttk.Style()
+            bg = style.colors.bg
+            fg = style.colors.fg
+
+            # 轻微底色差（克制一些）
+            row_a = self._mix(bg, fg, 0.04)
+            row_b = self._mix(bg, fg, 0.07)
+
+            tv.tag_configure("row_a", background=row_a)
+            tv.tag_configure("row_b", background=row_b)
+
+            tv.tag_configure("ok", foreground=style.colors.success)
+            tv.tag_configure("bad", foreground=style.colors.danger)
+        except Exception:
+            # 失败不影响功能
+            pass
+
+    def _tv_insert(self, tv: ttk.Treeview, values, index: int, status: Optional[str] = None):
+        tags = ["row_a" if index % 2 == 0 else "row_b"]
+        if status == "可用":
+            tags.append("ok")
+        elif status == "超时":
+            tags.append("bad")
+        tv.insert("", "end", values=values, tags=tags)
+
+
     def create_widgets(self):
         # --- App Bar ---
         appbar = ttk.Frame(self, padding=(10, 8))
@@ -260,38 +317,62 @@ class HostsOptimizer(ttk.Frame):
 
         actions = ttk.Frame(appbar)
         actions.pack(side=RIGHT)
-
-        self.about_btn = ttk.Button(actions, text="关于", command=self.show_about, bootstyle=INFO, width=8)
-        self.about_btn.pack(side=LEFT, padx=5)
-
         # 源选择 - 下拉按钮
         self.remote_source_var = StringVar(value=REMOTE_HOSTS_SOURCE_CHOICES[0][0])
         self.remote_source_btn_text = StringVar()
         self.remote_source_btn_text.set(self._format_remote_source_button_text(self.remote_source_var.get()))
 
-        self.remote_source_btn = ttk.Menubutton(actions, textvariable=self.remote_source_btn_text, bootstyle="secondary", width=15)
+        self.remote_source_btn = ttk.Menubutton(
+            actions, textvariable=self.remote_source_btn_text, bootstyle="secondary", width=15
+        )
         self.remote_source_btn.pack(side=LEFT, padx=(12, 8))
-        
+
         menu = Menu(self.remote_source_btn, tearoff=0)
         for label, _ in REMOTE_HOSTS_SOURCE_CHOICES:
-            menu.add_radiobutton(label=label, variable=self.remote_source_var, value=label, command=self.on_source_change)
+            menu.add_radiobutton(
+                label=label, variable=self.remote_source_var, value=label, command=self.on_source_change
+            )
         self.remote_source_btn["menu"] = menu
 
-        # 顶部按钮 - 保留原版文字
-        self.refresh_remote_btn = ttk.Button(actions, text="刷新远程 Hosts", command=self.refresh_remote_hosts, bootstyle=SUCCESS, width=15, state=DISABLED)
+        # 顶部按钮（左侧：数据源 / 刷新）
+        self.refresh_remote_btn = ttk.Button(
+            actions, text="🔄 刷新远程 Hosts", command=self.refresh_remote_hosts,
+            bootstyle=SUCCESS, width=15, state=DISABLED
+        )
         self.refresh_remote_btn.pack(side=LEFT, padx=5)
-        
-        self.flush_dns_btn = ttk.Button(actions, text="刷新 DNS", command=self.flush_dns, bootstyle=INFO, width=10)
-        self.flush_dns_btn.pack(side=LEFT, padx=5)
-        
-        self.view_hosts_btn = ttk.Button(actions, text="查看 Hosts 文件", command=self.view_hosts_file, bootstyle=SECONDARY, width=12)
-        self.view_hosts_btn.pack(side=LEFT, padx=5)
-        
-        self.start_test_btn = ttk.Button(actions, text="开始测速", command=self.start_test, bootstyle=PRIMARY, width=10, state=DISABLED)
-        self.start_test_btn.pack(side=LEFT, padx=5)
-        
-        self.pause_test_btn = ttk.Button(actions, text="暂停测速", command=self.pause_test, bootstyle=WARNING, width=10, state=DISABLED)
-        self.pause_test_btn.pack(side=LEFT, padx=5)
+
+        # 顶部按钮（右侧：主操作）
+        self.pause_test_btn = ttk.Button(
+            actions, text="⏸ 暂停测速", command=self.pause_test,
+            bootstyle=WARNING, width=10, state=DISABLED
+        )
+        self.pause_test_btn.pack(side=RIGHT, padx=(8, 0))
+
+        self.start_test_btn = ttk.Button(
+            actions, text="▶ 开始测速", command=self.start_test,
+            bootstyle=PRIMARY, width=10, state=DISABLED
+        )
+        self.start_test_btn.pack(side=RIGHT, padx=5)
+
+        # 更多功能：把次要动作收起来，界面更清爽
+        self.more_btn = ttk.Menubutton(actions, text="🧰 更多 ▾", bootstyle="secondary", width=10)
+        self.more_btn.pack(side=RIGHT, padx=(0, 8))
+        more_menu = Menu(self.more_btn, tearoff=0)
+        more_menu.add_command(label="🧹刷新 DNS", command=self.flush_dns)
+        more_menu.add_command(label="📄查看 Hosts 文件", command=self.view_hosts_file)
+        more_menu.add_separator()
+        more_menu.add_command(label="ℹ 关于", command=self.show_about)
+        self.more_btn["menu"] = more_menu
+
+        # ToolTip：提升成熟度（不影响功能）
+        try:
+            ToolTip(self.remote_source_btn, text="选择远程 hosts 数据源（默认按优先级自动选择）")
+            ToolTip(self.refresh_remote_btn, text="从远程源获取 GitHub 相关 hosts 记录")
+            ToolTip(self.start_test_btn, text="对当前 IP 列表进行并发测速并排序")
+            ToolTip(self.pause_test_btn, text="停止当前测速任务")
+            ToolTip(self.more_btn, text="更多工具：刷新 DNS / 查看 hosts / 关于")
+        except Exception:
+            pass
 
         # --- Body ---
         body = ttk.Frame(self)
@@ -311,7 +392,7 @@ class HostsOptimizer(ttk.Frame):
 
         # 远程Hosts页 - 保留原版文字
         self.remote_frame = ttk.Frame(notebook, padding=8)
-        notebook.add(self.remote_frame, text="远程 Hosts（仅 GitHub）")
+        notebook.add(self.remote_frame, text="🌐远程Hosts（仅 GitHub）")
         self.remote_tree = self._create_treeview(self.remote_frame, ["ip", "domain"], ["IP 地址", "域名"], [140, 240])
 
         # 自定义预设页 - 保留原版文字
@@ -325,9 +406,9 @@ class HostsOptimizer(ttk.Frame):
         # 自定义工具栏
         custom_toolbar = ttk.Frame(self.custom_frame)
         custom_toolbar.pack(fill=X, pady=(0, 10))
-        self.add_preset_btn = ttk.Button(custom_toolbar, text="添加", command=self.add_preset, bootstyle=SUCCESS, width=8)
+        self.add_preset_btn = ttk.Button(custom_toolbar, text="➕ 添加", command=self.add_preset, bootstyle=SUCCESS, width=8)
         self.add_preset_btn.pack(side=LEFT, padx=(0, 6))
-        self.delete_preset_btn = ttk.Button(custom_toolbar, text="删除", command=self.delete_preset, bootstyle=DANGER, width=8)
+        self.delete_preset_btn = ttk.Button(custom_toolbar, text="🗑 删除", command=self.delete_preset, bootstyle=DANGER, width=8)
         self.delete_preset_btn.pack(side=LEFT, padx=6)
         self.resolve_preset_btn = ttk.Button(custom_toolbar, text="批量解析", command=self.resolve_selected_presets, bootstyle=INFO, width=12)
         self.resolve_preset_btn.pack(side=LEFT, padx=6)
@@ -355,6 +436,7 @@ class HostsOptimizer(ttk.Frame):
             self.result_tree.heading(c, text=t)
             self.result_tree.column(c, width=w, anchor="center" if c=="select" else "w")
         self.result_tree.pack(fill=BOTH, expand=True, pady=(0, 10))
+        self._setup_treeview_tags(self.result_tree)
         self.result_tree.bind("<Button-1>", self.on_tree_click)
 
         action_bar = ttk.Frame(right_card)
@@ -379,6 +461,7 @@ class HostsOptimizer(ttk.Frame):
             tv.heading(c, text=h)
             tv.column(c, width=w)
         tv.pack(fill=BOTH, expand=True)
+        self._setup_treeview_tags(tv)
         return tv
 
     # -------------------------
@@ -426,7 +509,8 @@ class HostsOptimizer(ttk.Frame):
             with open(self.presets_file, "r", encoding="utf-8") as f: self.custom_presets = json.load(f)
         except: self.custom_presets = d
         self.preset_tree.delete(*self.preset_tree.get_children())
-        for x in self.custom_presets: self.preset_tree.insert("", "end", values=[x])
+        for idx, x in enumerate(self.custom_presets):
+            self._tv_insert(self.preset_tree, [x], idx)
 
     def save_presets(self):
         try:
@@ -439,7 +523,8 @@ class HostsOptimizer(ttk.Frame):
             s = s.strip().lower()
             if s not in self.custom_presets:
                 self.custom_presets.append(s)
-                self.preset_tree.insert("", "end", values=[s])
+                idx = len(self.preset_tree.get_children())
+                self._tv_insert(self.preset_tree, [s], idx)
                 self.save_presets()
 
     def delete_preset(self):
@@ -507,7 +592,8 @@ class HostsOptimizer(ttk.Frame):
         self.progress.stop()
         self.progress.configure(mode="determinate", value=0)
         self.remote_tree.delete(*self.remote_tree.get_children())
-        for x in self.remote_hosts_data: self.remote_tree.insert("", "end", values=x)
+        for idx, x in enumerate(self.remote_hosts_data):
+            self._tv_insert(self.remote_tree, x, idx)
         self.status_label.config(text=f"远程Hosts刷新完成，共找到 {len(self.remote_hosts_data)} 条记录", bootstyle=SUCCESS)
         self.refresh_remote_btn.config(state=NORMAL)
         self.check_start_btn()
@@ -533,7 +619,8 @@ class HostsOptimizer(ttk.Frame):
 
     def _update_resolve_ui(self):
         self.all_resolved_tree.delete(*self.all_resolved_tree.get_children())
-        for x in self.smart_resolved_ips: self.all_resolved_tree.insert("", "end", values=x)
+        for idx, x in enumerate(self.smart_resolved_ips):
+            self._tv_insert(self.all_resolved_tree, x, idx)
         self.status_label.config(text=f"解析完成，共找到 {len(self.smart_resolved_ips)} 个IP", bootstyle=SUCCESS)
         self.resolve_preset_btn.config(state=NORMAL)
         self.check_start_btn()
@@ -589,8 +676,8 @@ class HostsOptimizer(ttk.Frame):
         if not self.result_tree.winfo_exists(): return
         self.result_tree.delete(*self.result_tree.get_children())
         # 排序
-        for ip, d, ms, st, sel in sorted(self.test_results, key=lambda x: x[2]):
-            self.result_tree.insert("", "end", values=["✓" if sel else "□", ip, d, ms, st])
+        for idx, (ip, d, ms, st, sel) in enumerate(sorted(self.test_results, key=lambda x: x[2])):
+            self._tv_insert(self.result_tree, ["✓" if sel else "□", ip, d, ms, st], idx, status=st)
 
     def _monitor_test_completion(self):
         self.executor.shutdown(wait=True)

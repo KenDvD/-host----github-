@@ -151,7 +151,7 @@ class AboutWindow:
         master,
         *,
         app_name: str = "智能Hosts测速工具",
-        version: str = "V1.4",
+        version: str = "V1.5",
         author: str = "毕加索自画像",
         github_profile_url: str = "https://github.com/KenDvD",
         github_repo_url: str = "https://github.com/KenDvD/SmartHostsTool-github",
@@ -362,22 +362,7 @@ class AboutWindow:
     # Avatar
     # -------------------------
     def _render_avatar(self, parent) -> None:
-        candidate_names = [
-            "头像.jpg",
-            "头像.jpeg",
-            "头像.png",
-            "头线.jpg",
-            "头线.png",
-            "avatar.jpg",
-            "avatar.png",
-        ]
-        candidate_paths = []
-        for name in candidate_names:
-            candidate_paths.append(resource_path(name))
-        for folder in ("assets", "res", "resources", "img", "images"):
-            for name in candidate_names:
-                candidate_paths.append(resource_path(folder, name))
-        avatar_path = find_first_existing(candidate_paths)
+        avatar_path = resource_path("头像.jpg")
 
         if not (avatar_path and Image and ImageTk and ImageOps and ImageDraw):
             ttk.Label(parent, text="🤖", font=("Segoe UI", 84), padding=(10, 2)).pack()
