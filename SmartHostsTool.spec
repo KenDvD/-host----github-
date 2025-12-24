@@ -1,22 +1,24 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
 import os
-from pathlib import Path
 
-# 让 spec 与当前工作目录无关：无论你从哪里执行 pyinstaller，都能找到入口脚本和资源文件
-PROJECT_DIR = Path(os.path.abspath(os.getcwd()))
+# 获取项目根目录
+try:
+    PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    PROJECT_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
 
 a = Analysis(
-    [str(PROJECT_DIR / "main_modern.py")],
-    pathex=[str(PROJECT_DIR)],
+    [os.path.join(PROJECT_DIR, 'main_modern.py')],
+    pathex=[PROJECT_DIR],
     binaries=[],
-    # datas: (源文件路径, 打包后相对目录)
     datas=[
-        (str(PROJECT_DIR / "头像.jpg"), "."),
-        (str(PROJECT_DIR / "presets.json"), "."),
-        # 你的 About 窗口会在运行时尝试读取 icon.ico/icon.png 来设置标题栏图标
-        (str(PROJECT_DIR / "icon.ico"), "."),
-        # 添加可能的备用头像文件（如果存在）
+        (os.path.abspath('头像.jpg'), '.'),
+        (os.path.abspath('presets.json'), '.'),
+        (os.path.abspath('icon.ico'), '.'),
+        (os.path.abspath('utils.py'), '.'),
+        (os.path.abspath('ui_components.py'), '.')
     ],
     hiddenimports=[],
     hookspath=[],
@@ -26,7 +28,6 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -34,23 +35,19 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="SmartHostsTool",
+    name='SmartHostsTool',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    # GUI 程序建议关闭控制台窗口
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[str(PROJECT_DIR / "icon.ico")],
-    # 如果你希望写 hosts 时自动弹出管理员权限请求，可取消下一行注释（仅 Windows 有效）
-    # uac_admin=True,
+    icon=['icon.ico'],
 )
-
 coll = COLLECT(
     exe,
     a.binaries,
@@ -58,5 +55,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="SmartHostsTool",
+    name='SmartHostsTool',
 )

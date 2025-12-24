@@ -38,10 +38,9 @@ except Exception:  # pragma: no cover
     ImageFilter = None
 
 
-def resource_path(*parts: str) -> str:
-    """返回资源绝对路径，兼容 PyInstaller 与源码运行。"""
-    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_dir, *parts)
+# 导入自定义模块
+from utils import resource_path
+from ui_components import GlassBackground
 
 
 def find_first_existing(paths: Sequence[str]) -> Optional[str]:
@@ -51,94 +50,7 @@ def find_first_existing(paths: Sequence[str]) -> Optional[str]:
     return None
 
 
-class _GlassBackground:
-    """
-    为窗口提供"玻璃质感"的背景（渐变 + 柔和噪点）。
-    Tk/ttk 本身不支持真正的局部磨砂模糊，这里用视觉拟态实现：
-    - 生成一张渐变背景图，铺到 Canvas；
-    - 组件使用"卡片"风格（边框/阴影拟态）叠在上方。
-    """
 
-    def __init__(self, master: ttk.Toplevel):
-        self.master = master
-        self._canvas = ttk.Canvas(master, highlightthickness=0, bd=0)
-        self._canvas.place(x=0, y=0, relwidth=1, relheight=1)
-
-        self._img = None
-        self._img_id = None
-        self._after_id = None
-
-        self.master.bind("<Configure>", self._schedule_redraw)
-
-    def lower(self):
-        try:
-            # 尝试将canvas移到所有其他组件下方
-            self._canvas.master.lower(self._canvas)
-        except Exception:
-            # 兼容不同版本的Tkinter
-            pass
-
-    def _schedule_redraw(self, _evt=None):
-        if self._after_id:
-            try:
-                self.master.after_cancel(self._after_id)
-            except Exception:
-                pass
-        self._after_id = self.master.after(40, self._redraw)
-
-    def _redraw(self):
-        self._after_id = None
-        w = max(420, int(self.master.winfo_width()))
-        h = max(260, int(self.master.winfo_height()))
-
-        # 没 Pillow：用纯色退化
-        if not (Image and ImageTk):
-            self._canvas.configure(background="#0f172a")
-            return
-
-        # 深色渐变 + 微噪点
-        img = Image.new("RGB", (w, h), "#0b1020")
-
-        # 纵向渐变
-        top = (16, 24, 40)      # #101828
-        mid = (17, 22, 54)      # #111636
-        bot = (10, 14, 28)      # #0a0e1c
-
-        px = img.load()
-        for y in range(h):
-            t = y / max(1, h - 1)
-            if t < 0.55:
-                tt = t / 0.55
-                r = int(top[0] + (mid[0] - top[0]) * tt)
-                g = int(top[1] + (mid[1] - top[1]) * tt)
-                b = int(top[2] + (mid[2] - top[2]) * tt)
-            else:
-                tt = (t - 0.55) / 0.45
-                r = int(mid[0] + (bot[0] - mid[0]) * tt)
-                g = int(mid[1] + (bot[1] - mid[1]) * tt)
-                b = int(mid[2] + (bot[2] - mid[2]) * tt)
-            for x in range(w):
-                px[x, y] = (r, g, b)
-
-        # 斜向光晕（简单叠加）
-        glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(glow)
-        draw.ellipse((-w * 0.35, -h * 0.45, w * 0.95, h * 0.75), fill=(125, 211, 252, 55))
-        draw.ellipse((w * 0.20, h * 0.05, w * 1.25, h * 1.20), fill=(167, 139, 250, 35))
-        glow = glow.filter(ImageFilter.GaussianBlur(radius=40))
-        img = Image.alpha_composite(img.convert("RGBA"), glow).convert("RGB")
-
-        # 噪点
-        noise = Image.effect_noise((w, h), 18).convert("L")
-        noise = noise.point(lambda v: 18 if v > 120 else 0)  # 稀疏
-        noise_rgba = Image.merge("RGBA", (noise, noise, noise, noise))
-        img = Image.alpha_composite(img.convert("RGBA"), noise_rgba).convert("RGB")
-
-        self._img = ImageTk.PhotoImage(img)
-        if self._img_id is None:
-            self._img_id = self._canvas.create_image(0, 0, anchor="nw", image=self._img)
-        else:
-            self._canvas.itemconfig(self._img_id, image=self._img)
 
 
 class AboutWindow:
@@ -151,7 +63,7 @@ class AboutWindow:
         master,
         *,
         app_name: str = "智能Hosts测速工具",
-        version: str = "V1.5",
+        version: str = "V1.6",
         author: str = "毕加索自画像",
         github_profile_url: str = "https://github.com/KenDvD",
         github_repo_url: str = "https://github.com/KenDvD/SmartHostsTool-github",
@@ -201,7 +113,7 @@ class AboutWindow:
         self._set_icon()
 
         # 背景
-        self._bg = _GlassBackground(self.window)
+        self._bg = GlassBackground(self.window)
         self._bg.lower()
 
         self._build_ui()
